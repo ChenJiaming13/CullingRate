@@ -1,19 +1,36 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
+[Serializable]
+public class ValidDrawStatsSettings
+{
+    public bool statObjects = true;
+    public bool statTriangles = true;
+}
+
 public class ValidDrawStatsRendererFeature : ScriptableRendererFeature
 {
+    public ValidDrawStatsSettings settings = new();
+    
     private class ValidDrawStatsPass : ScriptableRenderPass
     {
         private readonly RenderTexture m_ColorBuffer = new(Screen.width, Screen.height, 0, RenderTextureFormat.ARGB32,
             RenderTextureReadWrite.Linear);
         private readonly RenderTexture m_DepthBuffer = new(Screen.width, Screen.height, 24, RenderTextureFormat.Depth,
             RenderTextureReadWrite.Linear);
+
+        public ValidDrawStatsSettings settings
+        {
+            get;
+            set;
+        }
         
         private void ReadBack()
         {
+            if (!settings.statObjects && !settings.statTriangles) return;
             var width = m_ColorBuffer.width;
             var height = m_ColorBuffer.height;
             var t2d = new Texture2D(width, height, TextureFormat.ARGB32, false);
@@ -25,11 +42,21 @@ public class ValidDrawStatsRendererFeature : ScriptableRendererFeature
             var pixels = t2d.GetPixels(0, 0, width, height);
             var objectIds = new HashSet<float>();
             var triangles = new HashSet<Color>();
-            foreach (var pixel in pixels)
+            if (settings.statObjects)
             {
-                if (pixel.r == 0.0f) continue;
-                objectIds.Add(pixel.r);
-                triangles.Add(pixel);
+                foreach (var pixel in pixels)
+                {
+                    if (pixel.r == 0.0f) continue;
+                    objectIds.Add(pixel.r);
+                }
+            }
+            if (settings.statTriangles)
+            {
+                foreach (var pixel in pixels)
+                {
+                    if (pixel.r == 0.0f) continue;
+                    triangles.Add(pixel);
+                }
             }
             FrameStats.ValidObjectCount = objectIds.Count;
             FrameStats.ValidTriangleCount = triangles.Count;
@@ -75,6 +102,7 @@ public class ValidDrawStatsRendererFeature : ScriptableRendererFeature
     
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
+        m_ValidDrawStatsPass.settings = settings;
         renderer.EnqueuePass(m_ValidDrawStatsPass);
     }
 }
